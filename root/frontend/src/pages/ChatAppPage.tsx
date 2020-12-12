@@ -56,6 +56,30 @@ const getUserDataFromLocalStorage = () => {
   }
 }
 
+const querySocket = (userName: string | undefined, roomId: string | null) => {
+  const userLocalStorageData = getUserDataFromLocalStorage();
+
+  const authQuery: {name?:string, roomId?: string, userId?: string} = {};
+
+  if (userName) {
+    authQuery.name = userName;
+  }
+  if (userLocalStorageData.roomId) {
+    authQuery.roomId = userLocalStorageData.roomId;
+  }
+  else if (roomId) {
+    authQuery.roomId = roomId;
+  }
+  if (userLocalStorageData.userId) {
+    authQuery.userId = userLocalStorageData.userId;
+  }
+
+  return io(ENDPOINT, {
+    transports: ['websocket', 'polling', 'flashsocket'],
+    query: authQuery
+  })
+}
+
 
 export const ChatAppPage: React.FC = () => {
 
@@ -63,37 +87,11 @@ export const ChatAppPage: React.FC = () => {
   const userName = useSelector(getUserName());
   const socketStatus = useSelector(getSocketStatus());
 
-  const socketRef = useRef<Socket | null>(null);
+  const socketRef = useRef<Socket>(querySocket(userName, roomId));
 
   const dispatch = useAppDispatch();
 
   useEffect(() => {
-
-    const userLocalStorageData = getUserDataFromLocalStorage();
-
-    const authQuery: {name?:string, roomId?: string, userId?: string} = {};
-
-    if (userName) {
-      authQuery.name = userName;
-    }
-    if (userLocalStorageData.roomId) {
-      authQuery.roomId = userLocalStorageData.roomId;
-    }
-    else if (roomId) {
-      authQuery.roomId = roomId;
-    }
-    if (userLocalStorageData.userId) {
-      authQuery.userId = userLocalStorageData.userId;
-    }
-
-    console.log(userLocalStorageData);
-    
-    if (!socketRef.current) {
-      socketRef.current = io(ENDPOINT, {
-        transports: ['websocket', 'polling', 'flashsocket'],
-        query: authQuery
-      })
-    }
 
     let socket = socketRef.current;
 
@@ -138,8 +136,8 @@ export const ChatAppPage: React.FC = () => {
       dispatch(disconnectRoom());
     });
 
-    return () => {socketRef.current?.disconnect()}
-  }, []);
+    return () => {socket.disconnect()}
+  }, [dispatch]);
 
   const handleDisconnectClick = (e: React.MouseEvent) => {
     localStorage.removeItem('userId');
