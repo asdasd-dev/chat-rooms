@@ -1,5 +1,3 @@
-import { Socket } from "socket.io-client";
-
 // userSlice
 
 export enum USER_STATUS {

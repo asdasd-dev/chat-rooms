@@ -1,8 +1,8 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useRef } from 'react'
 import { useSelector } from 'react-redux';
 import styled from 'styled-components'
 import { getMessages } from '../features/roomSlice';
-import { Message } from '../types';
+import { getUserId } from '../features/userSlice';
 
 
 const ChatContainer = styled.div`
@@ -12,9 +12,14 @@ const ChatContainer = styled.div`
     overflow-wrap: anywhere;
 `
 
+const UserMessage = styled.p<{isMe: boolean}>`
+    color: ${props => props.isMe ? 'green' : 'inherit'}
+`
+
 export const Chat: React.FC = () => {
 
     const messages = useSelector(getMessages());
+    const myId = useSelector(getUserId());
 
     const chatRef = useRef<HTMLDivElement>(null);
 
@@ -31,11 +36,11 @@ export const Chat: React.FC = () => {
                 const hours = date.getHours();
                 const minutes = date.getMinutes();
                 return (
-                    <p>
+                    <UserMessage key={date.getTime()} isMe={myId === message.user._id}>
                         <span >{message.user.name} </span>
                         <span> ({hours}:{minutes}) </span>
                         <span>{message.content} </span>
-                    </p>
+                    </UserMessage>
                 );
             })}
         </ChatContainer>

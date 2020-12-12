@@ -13,11 +13,12 @@ const db = require('./models');
 const Room = require("./models/room.model");
 const User = require("./models/user.model");
 const Message = require("./models/message.model");
-const { use } = require("./routes/index");
+const { mongoose } = require("./models");
 
 db.mongoose.connect(`mongodb://${dbConfig.HOST}:${dbConfig.PORT}/${dbConfig.DB}`, {
   useNewUrlParser: true,
-  useUnifiedTopology: true
+  useUnifiedTopology: true,
+  useFindAndModify: false 
 })
 .then(() => {
   console.log('Successfully connect to MongoDB.');
@@ -27,115 +28,106 @@ db.mongoose.connect(`mongodb://${dbConfig.HOST}:${dbConfig.PORT}/${dbConfig.DB}`
   process.exit();
 })
 
-const io = socketIo(server);
-
 app.use(cors());
 
 app.use(index);
 
-io.on("connection", (socket) => {
+const io = socketIo(server);
 
-  console.log(socket.id);
-  let user = null;
-  let room = null;
+io.use(async (socket, next) => {
+  try {
+    let roomId = socket.handshake.query.roomId;
+    let userId = socket.handshake.query.userId;
+    let name = socket.handshake.query.name;
 
-  socket.on('create user', async ({name, roomId}) => {
-    try {
-      user = new User({ name, socketIds: [socket.id] });
-      
-      if (roomId) {
-        room = await Room.findOne({_id: roomId})
-        room.users.push(user);
-      } 
-      else {
-        room = new Room({ users: [user] });
+    let user, room;
+
+    if (roomId) {
+      room = await Room.findOne({_id: mongoose.Types.ObjectId(roomId)});
+      if (!room) {
+        console.log('Room doesn\'t exist');
+        return next(new Error('No such room'));
       }
-
-      user.room = room;
-      
-      await user.save();
+    }
+    else {
+      room = new Room();
       await room.save();
-      await room
-      .populate('users', 'name id')
-      .populate({
-        path: 'messages',
-        populate: {
-          path: 'user',
-          model: 'User',
-          select: 'name -_id'
-        },
-        select: '-_id'
-      })
-      .execPopulate();
-
-        
-
-      console.log('final user is ', user);
-      console.log('final room is ', room);
-
-      socket.join(room._id.toString());
-      socket.room = room._id.toString();
-      socket.emit('user data', user.toObject())
-      socket.to(socket.room).emit('chat join', { name: user.name, _id: user._id} );
     }
-    catch (err) {
-      console.log('error creating user', err.message);
+
+    socket.roomId = room._id.toString();
+    socket.join(socket.roomId);
+
+    if (userId) {
+      user = await User.findOne({_id: mongoose.Types.ObjectId(userId)});
+      if (!user) {
+        console.log('User doesn\'t exist');
+        return next(new Error('No such user'));
+      }
+      user.socketIds.push(socket.id);
+      await user.save();
+      if (user.socketIds.length === 1) {
+        room.users.push(user);
+        await room.save();
+        socket.to(socket.roomId).emit('chat join', { name: user.name, _id: user._id} );
+      }
     }
-  });
-
-  socket.on('auth user', async ({userId}) => {
-    try {
-    console.log('auth user');
-    
-    user = await User.findOne({ _id: userId});
-    room = await Room.findOne({ _id: user.room });
-
-    user.socketIds.push(socket.id);
-    await user.save();
-
-    socket.join(room._id.toString());
-    socket.room = room._id.toString();
-
-    if (!room.users.includes(user._id)) {
-      console.log('user not in room so adding it and notify room that he is joined' );
+    else {
+      if (!name) {
+        console.log('No name provided for creating user')
+        return next(new Error('No name provided for creating user'));
+      }
+      user = new User({ name, room: room._id, socketIds: [socket.id] })
+      await user.save();
       room.users.push(user);
       await room.save();
-      socket.to(socket.room).emit('chat join', { _id: user._id, name: user.name });
+      socket.to(socket.roomId).emit('chat join', { name: user.name, _id: user._id} );
     }
 
     await user
-      .populate({
-        path: 'room',
-        populate: [{
-            path: 'users',
-            select: 'name id'
-          },
-          {
-            path: 'messages',
-            populate: {
-              path: 'user',
-              select: 'name -_id'
+        .populate({
+          path: 'room',
+          populate: [{
+              path: 'users',
+              select: 'name _id'
             },
-            select: 'content date user -_id'
-          }]
-      })
-      .execPopulate();
-
+            {
+              path: 'messages',
+              populate: {
+                path: 'user',
+                select: 'name _id'
+              },
+              select: 'content date user -_id'
+            }]
+        })
+        .execPopulate();
+    
+    socket.userId = user._id.toString();
+    socket.userName = user.name;
     socket.emit('user data', user.toObject())
-    }
-    catch (err) {
-      console.log('error auth user', err.message);
-    } 
-  });
+
+    return next();
+  } catch (err) {
+    console.log('Error middleware', err.message);
+    console.log(err.stack);
+  }
+})
+
+io.on("connection", (socket) => {
+
+  console.log('connected user is ', socket.userId);
+  console.log('user room is ', socket.roomId);
 
   socket.on('chat message', async (message) => {
     try {
-    const dbMessage = new Message({ user, content: message });
-    await dbMessage.save();
-    room.messages.push(dbMessage);
-    await room.save();
-    console.log('emit message to all users of room ', socket.room);
-    io.in(socket.room).emit('chat message', {user: {name: user.name, _id: user._id}, date: dbMessage.date, content: dbMessage.content});
+      const dbMessage = new Message({ user: mongoose.Types.ObjectId(socket.userId), content: message });
+      await dbMessage.save();
+      await Room.findOneAndUpdate({_id: socket.roomId}, 
+        { $push : {
+            messages: dbMessage._id
+          }
+        }, { new: true });
+      console.log(`emit message ${dbMessage.content} to all users of room ${socket.roomId}`);
+      io.in(socket.roomId).emit('chat message', {user: {name: socket.userName, _id: socket.userId}, date: dbMessage.date, content: dbMessage.content});
     } catch (err) {
       console.log('error handling message', err.message);
     }
@@ -143,18 +135,21 @@ io.on("connection", (socket) => {
 
   socket.on("disconnect", async () => {
     try {
-    user = await User.findOne({ _id: user._id });
-    user.socketIds = user.socketIds.filter(socketId => socketId !== socket.id);
-    await user.save();
-    if (user.socketIds.length === 0) {
-      room = await Room.findOne({ _id: user.room });
-      const disconnectedUserIndex = room.users.findIndex(roomUser => roomUser._id.equals(user._id));
-      if (disconnectedUserIndex !== -1) {
-        room.users.splice(disconnectedUserIndex, 1);
+      let user = await User.findOneAndUpdate({ _id: socket.userId },
+        { $pull: {
+            socketIds: socket.id
+          }
+        }, { new: true });
+      if (user.socketIds.length === 0) {
+        let room = await Room.findOneAndUpdate({ _id: socket.roomId }, 
+          { $pull: { 
+              users: mongoose.Types.ObjectId(socket.userId)
+            } 
+          }, { new: true });
+        console.log(`user ${socket.userId} is disconnected`);
+        console.log(`current users in room ${socket.roomId}: [${room.users}]`);
+        socket.to(socket.roomId).emit('chat leave', {name: user.name, _id: user._id})
       }
-      await room.save();
-      socket.to(socket.room).emit('chat leave', {name: user.name, _id: user._id})
-    }
   } catch (err) {
     console.log('error disconnecting', err.message);
   }

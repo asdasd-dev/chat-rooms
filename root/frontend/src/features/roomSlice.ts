@@ -1,5 +1,4 @@
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
-import { stat } from "fs";
 import { RootState } from "../store";
 import { RoomState, UserPublic, Message, ROOM_STATUS } from "../types";
 
@@ -13,6 +12,12 @@ const roomSlice = createSlice({
     reducers: {
         setRoom(state, action: PayloadAction<RoomState>) {
             return action.payload;
+        },
+        setRoomId(state, action: PayloadAction<string>) {
+            return {
+                status: ROOM_STATUS.REQUIRED,
+                id: action.payload
+            }
         },
         addUser: (state, action: PayloadAction<UserPublic>) => {
             if (state.status === ROOM_STATUS.CONNECTED) {
@@ -35,11 +40,16 @@ const roomSlice = createSlice({
                 console.log('pushing message');
                 state.messages.push(action.payload);
             }
+        },
+        disconnectRoom: (state) => {
+            return {
+                status: ROOM_STATUS.NONE
+            }
         }
     }
 })
 
-export const { setRoom, addUser, addMessage, removeUser } = roomSlice.actions;
+export const { setRoom, addUser, addMessage, removeUser, disconnectRoom, setRoomId } = roomSlice.actions;
 
 export default roomSlice.reducer;
 

@@ -1,19 +1,16 @@
 import React, { useEffect, useRef } from 'react';
 import { useSelector } from 'react-redux';
-import { Route, Switch } from 'react-router';
 import { io, Socket } from 'socket.io-client';
 import styled from 'styled-components';
 import { Chat } from '../components/Chat';
-import { JoinUserPage } from './JoinUserPage';
 import { MessageInput } from '../components/MessageInput';
-import { addMessage, setRoom, getRoomStatus, getRoomId, addUser, removeUser } from '../features/roomSlice';
-import { setUserName, setSocketStatus, setUser, getUserName, getUserId, getSocketStatus } from '../features/userSlice';
-import { useAppDispatch, AppDispatch } from '../store';
-import {  ROOM_STATUS, SOCKET_STATUS, UserPublic, UserData, UserLocalStorage, Message, CreateUserRequest } from '../types';
+import { addMessage, setRoom, getRoomId, addUser, removeUser, disconnectRoom } from '../features/roomSlice';
+import { setSocketStatus, setUser, getUserName, getSocketStatus, disconnectUser } from '../features/userSlice';
+import { useAppDispatch } from '../store';
+import {  ROOM_STATUS, SOCKET_STATUS, UserPublic, UserData, Message } from '../types';
 import { UsersList } from '../components/UsersList';
-import { stringify } from 'querystring';
 
-const ENDPOINT = "http://localhost:8080";
+const ENDPOINT = "http://localhost:8080/";
 
 const AppContainer = styled.div`
   height: 100vh;
@@ -31,7 +28,10 @@ const AppContainer = styled.div`
 `
 
 const Header = styled.div`
-  text-align: center;
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  flex-flow: row nowrap;
   grid-column-start: 1;
   grid-column-end: 3;
 `
@@ -41,72 +41,78 @@ const UsersAside = styled.div`
   grid-row-end: 4;
 `
 
-const ChatCell = styled.div`
-`
-
 const MessageInputCell = styled.div`
 `
 
-interface ChatAppPageParams {
-  roomIdRequired: string | null;
+const saveUserDataToLocalStorage = (userId: string, roomId: string) => {
+  localStorage.setItem("userId", userId);
+  localStorage.setItem("roomId", roomId);
+}
+
+const getUserDataFromLocalStorage = () => {
+  return {
+    userId: localStorage.getItem("userId"),
+    roomId: localStorage.getItem("roomId")
+  }
 }
 
 
-export const ChatAppPage: React.FC<ChatAppPageParams> = ({ roomIdRequired }) => {
+export const ChatAppPage: React.FC = () => {
 
   const roomId = useSelector(getRoomId());
   const userName = useSelector(getUserName());
   const socketStatus = useSelector(getSocketStatus());
 
   const socketRef = useRef<Socket | null>(null);
-  const userLocalStorageRef = useRef<string | null>(localStorage.getItem('userData'))
 
   const dispatch = useAppDispatch();
 
   useEffect(() => {
-    
-    if (!socketRef.current) {
-      socketRef.current = io(ENDPOINT, {transports: ['websocket', 'polling', 'flashsocket']});
+
+    const userLocalStorageData = getUserDataFromLocalStorage();
+
+    const authQuery: {name?:string, roomId?: string, userId?: string} = {};
+
+    if (userName) {
+      authQuery.name = userName;
+    }
+    if (userLocalStorageData.roomId) {
+      authQuery.roomId = userLocalStorageData.roomId;
+    }
+    else if (roomId) {
+      authQuery.roomId = roomId;
+    }
+    if (userLocalStorageData.userId) {
+      authQuery.userId = userLocalStorageData.userId;
     }
 
-    const socket = socketRef.current;
+    console.log(userLocalStorageData);
+    
+    if (!socketRef.current) {
+      socketRef.current = io(ENDPOINT, {
+        transports: ['websocket', 'polling', 'flashsocket'],
+        query: authQuery
+      })
+    }
+
+    let socket = socketRef.current;
+
+    console.log('socket: ', socket);
 
     socket.on('connect', () => {
       console.log('client connected');
-
-      // if don't have user data in local storage then 
-      // asking server to create new user
-      // and if required an existing room (joined by the link)
-      // then creating a new room
-      if (userLocalStorageRef.current === null) {
-        if (userName) {
-          const userCreateRequest: CreateUserRequest = {name: userName, roomId: roomIdRequired};
-          console.log('requested creating new user');
-          socket.emit('create user', userCreateRequest);
-        }
-      }
-      // if have user data in local storge then just 
-      // joining as existing user to the last used room
-      else {
-        const userLocalStorageObj: UserLocalStorage = JSON.parse(userLocalStorageRef.current);
-        socket.emit('auth user', userLocalStorageObj);
-      }
-
       dispatch(setSocketStatus(SOCKET_STATUS.CONNECTED));
     });
   
     socket.on('user data',  (userInitial: UserData) => {
       console.log('user data is ', userInitial);
-      const userLocalStorageObj: UserLocalStorage = {userId: userInitial._id, roomId: userInitial.room._id};
-      localStorage.setItem('userData', JSON.stringify(userLocalStorageObj));
-      dispatch(setRoom(
-        {
+      saveUserDataToLocalStorage(userInitial._id, userInitial.room._id);
+      dispatch(setRoom({
           status: ROOM_STATUS.CONNECTED,
           id: userInitial.room._id, 
           messages: userInitial.room.messages, 
           users: userInitial.room.users
-        }
-      ));
+        }));
       dispatch(setUser({id: userInitial._id, name: userInitial.name}))
       console.log('set user and room');
     })
@@ -128,24 +134,32 @@ export const ChatAppPage: React.FC<ChatAppPageParams> = ({ roomIdRequired }) => 
   
     socket.on('disconnect', () => {
       console.log('client disconnected');
-      dispatch(setSocketStatus(SOCKET_STATUS.DISCONNECTED));
+      dispatch(disconnectUser());
+      dispatch(disconnectRoom());
     });
-  
-    socket.on("FromAPI", (data: any) => {
-      console.log(data);
-    });
-  }, [socketRef]);
+
+    return () => {socketRef.current?.disconnect()}
+  }, []);
+
+  const handleDisconnectClick = (e: React.MouseEvent) => {
+    localStorage.removeItem('userId');
+    localStorage.removeItem('roomId');
+    if (socketRef.current) {
+      socketRef.current.disconnect();
+    }
+  }
 
   if (socketStatus === SOCKET_STATUS.DISCONNECTED) {
-    return <h1>No connection</h1>
+    return <h1>Connecting to the server</h1>
   }
 
   return (
     <AppContainer>
       <Header>
-        {roomId && 
-          <p>Your room link is {window.location.origin}/?roomId={roomId}</p>
-        } 
+          {roomId && 
+            <p>Your room link is {window.location.origin}/?roomId={roomId}</p>
+          } 
+          <button onClick={handleDisconnectClick}>disconnect</button>
       </Header>
       <UsersAside>
         <UsersList />

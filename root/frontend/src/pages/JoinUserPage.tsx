@@ -1,11 +1,9 @@
-import React, { useEffect, useState } from 'react';
-import {  useSelector } from 'react-redux';
-import { useHistory, useParams } from 'react-router';
+import React, { useState } from 'react';
+import { useSelector } from 'react-redux';
 import styled from 'styled-components';
-import { setRoom } from '../features/roomSlice';
-import { getUser, setUserName } from '../features/userSlice';
+import { getRoomId } from '../features/roomSlice';
+import { setUserName } from '../features/userSlice';
 import { useAppDispatch } from '../store';
-import { ROOM_STATUS, USER_STATUS } from '../types';
 
 const JoinUserPageContainer = styled.div`
     width: 100vw;
@@ -25,12 +23,10 @@ const JoinUserPageContainer = styled.div`
     }
 `
 
-interface JoinUserPageProps {
-    roomRequiredId: string | null
-}
+export const JoinUserPage: React.FunctionComponent = () => {
 
-export const JoinUserPage: React.FC<JoinUserPageProps> = ({ roomRequiredId }) => {
-
+    const roomId = useSelector(getRoomId());
+    
     const dispatch = useAppDispatch();
 
     const [name, setName] = useState('');
@@ -46,8 +42,8 @@ export const JoinUserPage: React.FC<JoinUserPageProps> = ({ roomRequiredId }) =>
     return (
         <JoinUserPageContainer>
             <form onSubmit={handleSubmit}>
-                {roomRequiredId &&
-                    <p>Joining to the room {roomRequiredId}</p>
+                {roomId &&
+                    <p>Joining to the room {roomId}</p>
                 }
                 <label>Enter your name</label>
                 <input type="text" onChange={e => setName(e.target.value)} />

@@ -2,6 +2,7 @@ import React from 'react'
 import { useSelector } from 'react-redux'
 import styled from 'styled-components'
 import { getUsers } from '../features/roomSlice'
+import { getUserId } from '../features/userSlice'
 
 const UsersListContainer = styled.div`
     & > div {
@@ -13,9 +14,14 @@ const UsersListContainer = styled.div`
     }
 `
 
+const UserListItem = styled.div<{isMe: boolean}>`
+    color: ${props => props.isMe ? 'green' : 'inherit'}
+`
+
 export const UsersList: React.FC = () => {
     
     const users = useSelector(getUsers());
+    const myId = useSelector(getUserId());
 
     console.log('users: ', users);
 
@@ -25,9 +31,7 @@ export const UsersList: React.FC = () => {
             { users &&
                 users.map(user => {
                     return (
-                        <div>
-                            <p>{user.name}</p>
-                        </div>
+                        <UserListItem key={user._id} isMe={myId === user._id}>{user.name}</UserListItem>
                     )
                 })
             }

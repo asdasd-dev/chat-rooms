@@ -1,5 +1,5 @@
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
-import { SOCKET_STATUS, UserState, UserStateSigned, USER_STATUS } from "../types";
+import { SOCKET_STATUS, UserState, USER_STATUS } from "../types";
 import { RootState } from '../store'
 
 const initialState: UserState = {
@@ -28,6 +28,12 @@ const userSlice = createSlice({
         },
         setSocketStatus: (state, action: PayloadAction<SOCKET_STATUS>) => {
             state.socketStatus = action.payload;
+        },
+        disconnectUser: (state) => {
+            return {
+                status: USER_STATUS.GUEST,
+                socketStatus: SOCKET_STATUS.DISCONNECTED
+            }
         }
     }
 })
@@ -49,6 +55,6 @@ export const getSocketStatus = () => (state: RootState) => {
     return state.user.socketStatus;
 }
 
-export const { setUser, setSocketStatus, setUserName } = userSlice.actions; 
+export const { setUser, setSocketStatus, setUserName, disconnectUser } = userSlice.actions; 
 
 export default userSlice.reducer;
