@@ -19,15 +19,33 @@ const GlobalStyle = createGlobalStyle`
   @font-face {
     font-family: 'Work Sans';
     src: url(${fontUrl});
+    font-weight: 300;
+  }
+
+  @font-face {
+    font-family: 'Work Sans';
+    src: url(${fontUrl});
+    font-weight: 400;
+  }
+
+  @font-face {
+    font-family: 'Work Sans';
+    src: url(${fontUrl});
+    font-weight: 500;
+  }
+
+  @font-face {
+    font-family: 'Work Sans';
+    src: url(${fontUrl});
+    font-weight: 600;
   }
 
   body {
     font-family: 'Work Sans';
+    font-weight: 300;
     margin: 0;
     color: white;
     background-color: ${theme.primaryColor};
-  }
-
   * {
     box-sizing: border-box;
   }

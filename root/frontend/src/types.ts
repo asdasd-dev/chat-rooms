@@ -26,6 +26,7 @@ export interface UserStateSigned {
     status: USER_STATUS.SIGNED,
     socketStatus: SOCKET_STATUS,
     id: string,
+    token: string,
     name: string,
 }
 
@@ -53,13 +54,15 @@ export interface Message {
 export interface RoomConnectedState {
     status: ROOM_STATUS.CONNECTED
     id: string,
+    token: string,
     messages: Message[],
     users: UserPublic[]
 }
 
 export interface RoomRequiredState {
     status: ROOM_STATUS.REQUIRED,
-    id: string
+    id: string,
+    token: string
 }
 
 export interface RoomNoneState {
@@ -72,19 +75,23 @@ export type RoomState = RoomConnectedState | RoomRequiredState | RoomNoneState;
 
 export interface RoomData {
     _id: string,
+    token: string,
     users: UserPublic[],
     messages: Message[],
 }
 
 export interface UserData {
     _id: string,
+    token: string,
     name: string,
     room: RoomData
 }
 
 export interface UserLocalStorage {
     userId: string,
-    roomId: string
+    roomId: string,
+    userToken: string,
+    roomToken: string
 }
 
 export interface CreateUserRequest {

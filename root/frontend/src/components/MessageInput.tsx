@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useSelector } from 'react-redux'
 import styled from 'styled-components'
 import { getUser } from '../features/userSlice'
@@ -46,12 +46,23 @@ interface MessageInputProps {
 
 export const MessageInput: React.FC<MessageInputProps> = ({ socket }) => {
 
-    const inputRef = useRef<HTMLInputElement>(null);
-
     const user = useSelector(getUser());
+
+    const inputRef = useRef<HTMLInputElement>(null);
 
     const [message, setMessage] = useState('');
 
+    const handleSubmit = useCallback((e: React.FormEvent) => {
+        e.preventDefault();
+        if (message && socket) {
+            console.log('sending message', message);
+            socket.emit('chat message', message);
+            setMessage('');
+        }
+    }, [message, socket])
+
+    // focus on text input on initialize
+    // and then on each mouse up with no selected text 
     useEffect(() => {
         inputRef.current?.focus();
         const mouseUpHandler = function() {
@@ -61,19 +72,8 @@ export const MessageInput: React.FC<MessageInputProps> = ({ socket }) => {
         }
         document.addEventListener('mouseup', mouseUpHandler);
 
-        return () => {
-            document.removeEventListener('mouseup', mouseUpHandler);
-        }
+        return () => document.removeEventListener('mouseup', mouseUpHandler);
     }, [inputRef])
-
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (message && socket) {
-            console.log('sending message', message);
-            socket.emit('chat message', message);
-            setMessage('');
-        }
-    }
 
     if (user.status === USER_STATUS.GUEST) {
         <MessageInputContainer>

@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { useSelector } from 'react-redux';
-import { setRoomId } from './features/roomSlice';
+import { setRoomIdAndToken } from './features/roomSlice';
 import { getUserStatus, setUser } from './features/userSlice';
 import { ChatAppPage } from './pages/ChatAppPage';
 import { JoinUserPage } from './pages/JoinUserPage';
@@ -13,30 +13,38 @@ function App() {
 
   const dispatch = useAppDispatch();
 
+
+  // Checking local storage and url query params 
+  // then pushing room/user data to the state
   useEffect(() => {
 
     const userIdLocalStorage = localStorage.getItem('userId');
     const roomIdLocalStorage = localStorage.getItem('roomId');
+    const userTokenLocalStorage = localStorage.getItem('userToken');
+    const roomTokenLocalStorage = localStorage.getItem('roomToken');
 
     const urlSearchParams = new URLSearchParams(window.location.search);
     const roomIdParam = urlSearchParams.get('roomId');
+    const roomTokenParam = urlSearchParams.get('roomToken');
     
-    if (userIdLocalStorage) {
+    if (userIdLocalStorage && userTokenLocalStorage) {
       console.log('found user id in local storage');
-      dispatch(setUser({id: userIdLocalStorage, name: ''}));
+      dispatch(setUser({id: userIdLocalStorage, name: '', token: userTokenLocalStorage}));
     } 
 
-    if (roomIdParam) {
+    if (roomIdLocalStorage && roomTokenLocalStorage) {
       console.log(`required room ${roomIdParam} from url query`)
-      dispatch(setRoomId(roomIdParam))
+      dispatch(setRoomIdAndToken({_id: roomIdLocalStorage, token: roomTokenLocalStorage}))
     }
-    else if (roomIdLocalStorage) {
-      console.log('found room id in local storage');
-      dispatch(setRoomId(roomIdLocalStorage));
+    else if (roomIdParam && roomTokenParam) {
+      console.log('found room id and token in local storage');
+      dispatch(setRoomIdAndToken({_id: roomIdParam, token: roomTokenParam}));
     }
 
   }, [dispatch])
 
+  // if user has no userId in localStorage
+  // then he is still guest => asking to set name
   if (userStatus === USER_STATUS.GUEST) {
     return <JoinUserPage />
   }

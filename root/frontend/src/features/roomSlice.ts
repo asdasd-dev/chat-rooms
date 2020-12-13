@@ -13,10 +13,11 @@ const roomSlice = createSlice({
         setRoom(state, action: PayloadAction<RoomState>) {
             return action.payload;
         },
-        setRoomId(state, action: PayloadAction<string>) {
+        setRoomIdAndToken(state, action: PayloadAction<{_id: string, token: string}>) {
             return {
                 status: ROOM_STATUS.REQUIRED,
-                id: action.payload
+                id: action.payload._id,
+                token: action.payload.token
             }
         },
         addUser: (state, action: PayloadAction<UserPublic>) => {
@@ -49,7 +50,7 @@ const roomSlice = createSlice({
     }
 })
 
-export const { setRoom, addUser, addMessage, removeUser, disconnectRoom, setRoomId } = roomSlice.actions;
+export const { setRoom, addUser, addMessage, removeUser, disconnectRoom, setRoomIdAndToken } = roomSlice.actions;
 
 export default roomSlice.reducer;
 
@@ -77,5 +78,14 @@ export const getUsers = () => (state: RootState) => {
     if (state.room.status === ROOM_STATUS.CONNECTED) {
         return state.room.users;
     }
-    return null;
+    return [];
+}
+
+export const getRoomToken = () => (state: RootState) => {
+    if (state.room.status !== ROOM_STATUS.NONE) {
+        return state.room.token;
+    }
+    else {
+        return null;
+    }
 }

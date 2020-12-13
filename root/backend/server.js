@@ -14,6 +14,7 @@ const Room = require("./models/room.model");
 const User = require("./models/user.model");
 const Message = require("./models/message.model");
 const { mongoose } = require("./models");
+const { ObjectID } = require("mongodb");
 
 db.mongoose.connect(`mongodb://${dbConfig.HOST}:${dbConfig.PORT}/${dbConfig.DB}`, {
   useNewUrlParser: true,
@@ -34,16 +35,30 @@ app.use(index);
 
 const io = socketIo(server);
 
+// check user query and send his user and room actual data
+// if everything ok
 io.use(async (socket, next) => {
   try {
+    console.log('middleware');
     let roomId = socket.handshake.query.roomId;
+    let roomToken = socket.handshake.query.roomToken;
     let userId = socket.handshake.query.userId;
+    let userToken = socket.handshake.query.userToken;
     let name = socket.handshake.query.name;
 
     let user, room;
 
+    // find query provided room or create the new one
     if (roomId) {
+      if (!ObjectID.isValid(roomId)) {
+        console.log('Not valid room id')
+        return next(new Error('Invalid room id'));
+      }
       room = await Room.findOne({_id: mongoose.Types.ObjectId(roomId)});
+      if (room.token !== roomToken) {
+        console.log('Wrong room token provided');
+        return next(new Error('Wrong room token'));
+      }
       if (!room) {
         console.log('Room doesn\'t exist');
         return next(new Error('No such room'));
@@ -54,14 +69,28 @@ io.use(async (socket, next) => {
       await room.save();
     }
 
+    // join socket to the found/created room and set
+    // socket roomId field corresponding to the room's id
     socket.roomId = room._id.toString();
     socket.join(socket.roomId);
 
+    // have userId provided by query => find him in database
+    // and updating his sockets list
+    // if he had no connected sockets before current join
+    // then notify his room's users about new online user
     if (userId) {
+      if (!ObjectID.isValid(userId)) {
+        console.log('Not valid user id')
+        return next(new Error('Invalid user id'));
+      }
       user = await User.findOne({_id: mongoose.Types.ObjectId(userId)});
       if (!user) {
         console.log('User doesn\'t exist');
         return next(new Error('No such user'));
+      }
+      if (user.token !== userToken) {
+        console.log('Wrong user token provided');
+        return next(new Error('Wrong user token'));
       }
       user.socketIds.push(socket.id);
       await user.save();
@@ -71,6 +100,8 @@ io.use(async (socket, next) => {
         socket.to(socket.roomId).emit('chat join', { name: user.name, _id: user._id} );
       }
     }
+    // when creating new user model notify all room members
+    // about the new online user
     else {
       if (!name) {
         console.log('No name provided for creating user')
@@ -83,6 +114,8 @@ io.use(async (socket, next) => {
       socket.to(socket.roomId).emit('chat join', { name: user.name, _id: user._id} );
     }
 
+    // populating user to send the initial data
+    // to the client
     await user
         .populate({
           path: 'room',
@@ -101,6 +134,8 @@ io.use(async (socket, next) => {
         })
         .execPopulate();
     
+    // set user-corresponding socket fields and
+    // send object with actual data to the client
     socket.userId = user._id.toString();
     socket.userName = user.name;
     socket.emit('user data', user.toObject())
@@ -140,6 +175,8 @@ io.on("connection", (socket) => {
             socketIds: socket.id
           }
         }, { new: true });
+      // emit chat leave and update room users array
+      // only if got disconnect from the last socket of the user 
       if (user.socketIds.length === 0) {
         let room = await Room.findOneAndUpdate({ _id: socket.roomId }, 
           { $pull: { 

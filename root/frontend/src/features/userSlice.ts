@@ -11,12 +11,13 @@ const userSlice = createSlice({
     name: 'user',
     initialState,
     reducers: {
-        setUser: (state, action: PayloadAction<{id: string, name: string}>) => {
+        setUser: (state, action: PayloadAction<{id: string, token: string, name: string}>) => {
             return {
                 status: USER_STATUS.SIGNED,
                 socketStatus: state.socketStatus,
                 name: action.payload.name,
-                id: action.payload.id
+                id: action.payload.id,
+                token: action.payload.token
             }
         },
         setUserName: (state, action: PayloadAction<string>) => {
@@ -53,6 +54,12 @@ export const getUserId = () => (state: RootState) => {
 }
 export const getSocketStatus = () => (state: RootState) => {
     return state.user.socketStatus;
+}
+
+export const getUserToken = () => (state: RootState) => {
+    if (state.user.status === USER_STATUS.SIGNED) {
+        return state.user.token;
+    }
 }
 
 export const { setUser, setSocketStatus, setUserName, disconnectUser } = userSlice.actions; 

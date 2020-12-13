@@ -1,7 +1,6 @@
 const mongoose = require('mongoose');
+const cryptoRandomString = require('crypto-random-string');
 
-const Message = require('./message.model');
-const Room = require('./room.model');
 
 const userSchema = new mongoose.Schema({
     name: String,
@@ -21,7 +20,11 @@ const userSchema = new mongoose.Schema({
     socketIds: [{
         type: [String],
         default: []
-    }]
+    }],
+    token: {
+        type: String,
+        default: () => cryptoRandomString({length: 20, type: 'url-safe'})
+    }
 });
 
 const User = mongoose.model("User", userSchema);
